@@ -5,7 +5,7 @@
   // constants / config
   // ===========================
   const APP_NAME = 'AuraWave';
-  const API_BASE = 'https://api.deezer.com';
+  const API_BASE = '/api';
   const PROXY_BASES = [
     (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
