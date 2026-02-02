@@ -5,16 +5,7 @@
   // constants / config
   // ===========================
   const APP_NAME = 'AuraWave';
-  const API_BASE = 'https://api.deezer.com';
-  const USE_LOCAL_PROXY = API_BASE.startsWith('/');
-  const PROXY_BASES = [
-    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url) => `https://cors.isomorphic-git.org/${url}`,
-    (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
-  ];
-  const API_TIMEOUT = USE_LOCAL_PROXY ? 20000 : 12000;
-  const CACHE_TTL = 1000 * 60 * 5;
+  const LOCAL_TRACKS = Array.isArray(window.AURAWAVE_TRACKS) ? window.AURAWAVE_TRACKS : [];
   const ICONS = {
     heartOutline: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.3/24/outline/heart.svg',
     heartSolid: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.3/24/solid/heart.svg',
@@ -46,19 +37,6 @@
     const m = Math.floor(s / 60);
     const r = s % 60;
     return `${m}:${r.toString().padStart(2, '0')}`;
-  };
-
-  const encodeParams = (params) => {
-    const sp = new URLSearchParams();
-    Object.entries(params || {}).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') sp.set(k, v);
-    });
-    return sp.toString();
-  };
-
-  const safeJson = async (res) => {
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return { error: { message: text } }; }
   };
 
   const showToast = (message) => {
@@ -155,83 +133,131 @@
   };
 
   // ===========================
-  // api client
+  // local data (no API)
   // ===========================
-  const cache = new Map();
+  const normalizeTrack = (track) => {
+    const t = { ...track };
+    if (!t.artist) t.artist = { id: `artist-${t.id}`, name: 'Unknown' };
+    if (!t.album) t.album = { id: `album-${t.id}`, title: 'Unknown' };
 
-  const fetchWithTimeout = async (url, timeout = API_TIMEOUT) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    try {
-      return await fetch(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    t.artist.picture = t.artist.picture || t.artist.picture_medium || t.artist.picture_big || t.artist.picture_xl || '';
+    t.artist.picture_medium = t.artist.picture_medium || t.artist.picture || t.artist.picture_big || '';
+    t.artist.picture_big = t.artist.picture_big || t.artist.picture || t.artist.picture_medium || '';
+
+    t.album.cover = t.album.cover || t.album.cover_medium || t.album.cover_big || t.album.cover_xl || '';
+    t.album.cover_medium = t.album.cover_medium || t.album.cover || t.album.cover_big || '';
+    t.album.cover_big = t.album.cover_big || t.album.cover || t.album.cover_medium || '';
+    t.album.cover_xl = t.album.cover_xl || t.album.cover_big || t.album.cover_medium || t.album.cover || '';
+
+    return t;
   };
 
-  const apiFetch = async (path, params = {}) => {
-    const qs = encodeParams(params);
-    const url = `${API_BASE}${path}${qs ? `?${qs}` : ''}`;
-    const now = Date.now();
-    const cached = cache.get(url);
-    if (cached && now - cached.ts < CACHE_TTL) return cached.data;
+  const localData = (() => {
+    const tracks = LOCAL_TRACKS.map(normalizeTrack).filter((t) => t && t.id);
+    const artistSeed = new Map();
+    const albumSeed = new Map();
 
-    const endpoints = USE_LOCAL_PROXY ? [url] : [url, ...PROXY_BASES.map((build) => build(url))];
-    let lastError;
-
-    for (const endpoint of endpoints) {
-      try {
-        const res = await fetchWithTimeout(endpoint);
-        const data = await safeJson(res);
-        if (!res.ok || data?.error) {
-          const msg = data?.error?.message || `Request failed (${res.status})`;
-          throw new Error(msg);
+    tracks.forEach((track) => {
+      const artistId = String(track.artist?.id || '');
+      if (artistId) {
+        let artist = artistSeed.get(artistId);
+        if (!artist) {
+          artist = { ...track.artist, nb_fan: 0, track_ids: [], album_ids: new Set() };
+          artistSeed.set(artistId, artist);
         }
-        cache.set(url, { ts: now, data });
-        return data;
-      } catch (err) {
-        if (err?.name === 'AbortError') {
-          lastError = new Error('Request timeout. Please try again.');
-        } else {
-          lastError = err;
-        }
+        artist.nb_fan += 1;
+        artist.track_ids.push(track.id);
+        if (track.album?.id) artist.album_ids.add(String(track.album.id));
       }
-    }
 
-    throw lastError || new Error('Network error');
-  };
+      const albumId = String(track.album?.id || '');
+      if (albumId) {
+        let album = albumSeed.get(albumId);
+        if (!album) {
+          album = { ...track.album, artist: track.artist, tracks: { data: [] } };
+          albumSeed.set(albumId, album);
+        }
+        album.tracks.data.push(track);
+      }
+    });
+
+    const artists = Array.from(artistSeed.values()).map((artist) => ({
+      ...artist,
+      album_ids: Array.from(artist.album_ids || []),
+    }));
+    const albums = Array.from(albumSeed.values());
+    const artistIndex = new Map(artists.map((artist) => [String(artist.id), artist]));
+    const albumIndex = new Map(albums.map((album) => [String(album.id), album]));
+    const rankedTracks = [...tracks].sort((a, b) => (b.rank || 0) - (a.rank || 0));
+
+    return {
+      tracks,
+      artists,
+      albums,
+      artistIndex,
+      albumIndex,
+      rankedTracks,
+    };
+  })();
+
+  const matchQuery = (value, query) => String(value || '').toLowerCase().includes(query);
 
   const api = {
-    search(query, type = 'track') {
-      const endpoint = type === 'artist' ? '/search/artist' : type === 'album' ? '/search/album' : '/search';
-      return apiFetch(endpoint, { q: query });
+    async search(query, type = 'track') {
+      const q = query.trim().toLowerCase();
+      if (!q) return { data: [] };
+
+      if (type === 'artist') {
+        return { data: localData.artists.filter((a) => matchQuery(a.name, q)).slice(0, 24) };
+      }
+      if (type === 'album') {
+        return {
+          data: localData.albums.filter((a) => matchQuery(a.title, q) || matchQuery(a.artist?.name, q)).slice(0, 24),
+        };
+      }
+
+      return {
+        data: localData.tracks.filter((t) => matchQuery(t.title, q) || matchQuery(t.artist?.name, q) || matchQuery(t.album?.title, q)).slice(0, 30),
+      };
     },
-    searchArtist(query, limit = 1) {
-      return apiFetch('/search/artist', { q: query, limit });
+    async searchArtist(query, limit = 1) {
+      const q = query.trim().toLowerCase();
+      const data = localData.artists.filter((a) => matchQuery(a.name, q)).slice(0, limit);
+      return { data };
     },
-    searchAlbums(query, limit = 12) {
-      return apiFetch('/search/album', { q: query, limit });
+    async searchAlbums(query, limit = 12) {
+      const q = query.trim().toLowerCase();
+      const data = localData.albums.filter((a) => matchQuery(a.title, q) || matchQuery(a.artist?.name, q)).slice(0, limit);
+      return { data };
     },
-    getCharts() {
-      return apiFetch('/chart');
+    async getCharts() {
+      const topArtists = [...localData.artists].sort((a, b) => (b.track_ids?.length || 0) - (a.track_ids?.length || 0)).slice(0, 20);
+      const topAlbums = [...localData.albums].sort((a, b) => (b.tracks?.data?.length || 0) - (a.tracks?.data?.length || 0)).slice(0, 20);
+      return {
+        tracks: { data: localData.rankedTracks.slice(0, 20) },
+        albums: { data: topAlbums },
+        artists: { data: topArtists },
+      };
     },
-    getTrack(id) {
-      return apiFetch(`/track/${encodeURIComponent(id)}`);
+    async getTrack(id) {
+      return localData.tracks.find((t) => String(t.id) === String(id)) || null;
     },
-    getAlbum(id) {
-      return apiFetch(`/album/${encodeURIComponent(id)}`);
+    async getAlbum(id) {
+      return localData.albumIndex.get(String(id)) || null;
     },
-    getArtist(id) {
-      return apiFetch(`/artist/${encodeURIComponent(id)}`);
+    async getArtist(id) {
+      return localData.artistIndex.get(String(id)) || null;
     },
-    getArtistTopTracks(id) {
-      return apiFetch(`/artist/${encodeURIComponent(id)}/top`, { limit: 10 });
+    async getArtistTopTracks(id) {
+      const tracks = localData.tracks
+        .filter((t) => String(t.artist?.id) === String(id))
+        .sort((a, b) => (b.rank || 0) - (a.rank || 0))
+        .slice(0, 10);
+      return { data: tracks };
     },
-    getArtistAlbums(id, limit = 12) {
-      return apiFetch(`/artist/${encodeURIComponent(id)}/albums`, { limit });
-    },
-    getPlaylist(id) {
-      return apiFetch(`/playlist/${encodeURIComponent(id)}`);
+    async getArtistAlbums(id, limit = 12) {
+      const albums = localData.albums.filter((a) => String(a.artist?.id) === String(id)).slice(0, limit);
+      return { data: albums };
     },
   };
 
@@ -1165,8 +1191,12 @@
   };
 
   const showCORSMessage = (err) => {
-    if (!/Failed to fetch|NetworkError|CORS/i.test(err?.message || '')) return;
-    showToast('CORS blocked. Public proxy is down. Try again or switch network.');
+    if (!LOCAL_TRACKS.length) {
+      showToast('Local tracks not loaded. Check tracks.js.');
+      return;
+    }
+    if (!err?.message) return;
+    showToast(err.message);
   };
 
   // ===========================
