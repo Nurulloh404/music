@@ -5,7 +5,13 @@
   // constants / config
   // ===========================
   const APP_NAME = 'AuraWave';
-  const API_BASE = 'https://api.corsproxy.cyou/https://api.deezer.com';
+  const API_BASE = 'https://api.deezer.com';
+  const PROXY_BASES = [
+    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    (url) => `https://cors.isomorphic-git.org/${url}`,
+    (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
+  ];
   const API_TIMEOUT = 12000;
   const CACHE_TTL = 1000 * 60 * 5;
   const ICONS = {
@@ -152,6 +158,16 @@
   // ===========================
   const cache = new Map();
 
+  const fetchWithTimeout = async (url, timeout = API_TIMEOUT) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const apiFetch = async (path, params = {}) => {
     const qs = encodeParams(params);
     const url = `${API_BASE}${path}${qs ? `?${qs}` : ''}`;
@@ -159,20 +175,25 @@
     const cached = cache.get(url);
     if (cached && now - cached.ts < CACHE_TTL) return cached.data;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      const data = await safeJson(res);
-      if (!res.ok || data?.error) {
-        const msg = data?.error?.message || `Request failed (${res.status})`;
-        throw new Error(msg);
+    const endpoints = [url, ...PROXY_BASES.map((build) => build(url))];
+    let lastError;
+
+    for (const endpoint of endpoints) {
+      try {
+        const res = await fetchWithTimeout(endpoint);
+        const data = await safeJson(res);
+        if (!res.ok || data?.error) {
+          const msg = data?.error?.message || `Request failed (${res.status})`;
+          throw new Error(msg);
+        }
+        cache.set(url, { ts: now, data });
+        return data;
+      } catch (err) {
+        lastError = err;
       }
-      cache.set(url, { ts: now, data });
-      return data;
-    } finally {
-      clearTimeout(timeout);
     }
+
+    throw lastError || new Error('Network error');
   };
 
   const api = {
@@ -1140,7 +1161,7 @@
 
   const showCORSMessage = (err) => {
     if (!/Failed to fetch|NetworkError|CORS/i.test(err?.message || '')) return;
-    showToast('CORS blocked. Run `node proxy.js`, set window.AURAWAVE_PROXY, reload.');
+    showToast('CORS blocked. Public proxy is down. Try again or switch network.');
   };
 
   // ===========================
