@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0f16" />
+  <meta name="description" content="AuraWave — a modern, lightweight music streaming experience powered by Deezer previews." />
+  <title>AuraWave</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="28" height="28" role="img">
+            <defs>
+              <linearGradient id="aw-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#0aa7ff" />
+                <stop offset="1" stop-color="#35d9c0" />
+              </linearGradient>
+            </defs>
+            <circle cx="32" cy="32" r="28" fill="url(#aw-g)" />
+            <path d="M40 18v18.5a6.5 6.5 0 1 1-3-5.5V20l-12 3v14.5a6.5 6.5 0 1 1-3-5.5V18l18-4z" fill="#0b0f16"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">AuraWave</span>
+          <span class="brand-sub">Preview streaming</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Main Navigation">
+        <a href="#/home" class="nav-link" data-route="home">
+          <span class="material-symbols-outlined nav-icon" aria-hidden="true">home</span>
+          <span>Home</span>
+        </a>
+        <a href="#/search" class="nav-link" data-route="search">
+          <span class="material-symbols-outlined nav-icon" aria-hidden="true">search</span>
+          <span>Search</span>
+        </a>
+        <a href="#/favorites" class="nav-link" data-route="favorites">
+          <span class="material-symbols-outlined nav-icon" aria-hidden="true">favorite</span>
+          <span>Favorites</span>
+        </a>
+        <a href="#/history" class="nav-link" data-route="history">
+          <span class="material-symbols-outlined nav-icon" aria-hidden="true">history</span>
+          <span>History</span>
+        </a>
+        <a href="#/library" class="nav-link" data-route="library">
+          <span class="material-symbols-outlined nav-icon" aria-hidden="true">library_music</span>
+          <span>Your Library</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn ghost" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+          <span class="theme-icon" aria-hidden="true">◐</span>
+          <span class="theme-text">Theme</span>
+        </button>
+        <div class="small">Built with Deezer previews</div>
+      </div>
+    </aside>
+
+    <header class="mobile-topbar">
+      <div class="brand compact">
+        <div class="logo" aria-hidden="true"></div>
+        <span class="brand-name">AuraWave</span>
+      </div>
+      <button class="btn ghost" id="themeToggleMobile" aria-label="Toggle theme" title="Toggle theme">◐</button>
+    </header>
+
+    <main id="view" class="view" role="main" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="Bottom Navigation">
+      <a href="#/home" class="bottom-link" data-route="home">Home</a>
+      <a href="#/search" class="bottom-link" data-route="search">Search</a>
+      <a href="#/favorites" class="bottom-link" data-route="favorites">Favorites</a>
+      <a href="#/history" class="bottom-link" data-route="history">History</a>
+      <a href="#/library" class="bottom-link" data-route="library">Library</a>
+    </nav>
+
+    <section class="player" aria-label="Player">
+      <div class="player-mini" id="playerMini">
+        <div class="mini-cover" id="miniCover"></div>
+        <div class="mini-meta">
+          <div class="mini-title" id="miniTitle">Nothing playing</div>
+          <div class="mini-artist" id="miniArtist">Pick a track</div>
+        </div>
+        <div class="mini-controls">
+          <button class="btn icon" id="miniShuffle" aria-label="Shuffle">⇄</button>
+          <button class="btn icon" id="miniPrev" aria-label="Previous track">⟲</button>
+          <button class="btn icon" id="miniPlay" aria-label="Play or pause">▶</button>
+          <button class="btn icon" id="miniNext" aria-label="Next track">⟳</button>
+          <button class="btn icon" id="miniFav" aria-label="Like">
+            <img class="icon-svg" src="https://cdn.jsdelivr.net/npm/heroicons@2.1.3/24/outline/heart.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="mini-progress">
+          <span id="miniElapsed">0:00</span>
+          <input type="range" id="miniSeek" min="0" max="30" value="0" aria-label="Seek" />
+          <span id="miniRemaining">0:30</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="modalRoot" class="modal-root" aria-hidden="true"></div>
+
+  <script>window.AURAWAVE_PROXY='http://localhost:3000';</script>
+  <script src="app.js"></script>
+</body>
+</html>
