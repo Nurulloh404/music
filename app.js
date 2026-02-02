@@ -5,14 +5,15 @@
   // constants / config
   // ===========================
   const APP_NAME = 'AuraWave';
-  const API_BASE = '/api';
+  const API_BASE = 'https://api.deezer.com';
+  const USE_LOCAL_PROXY = API_BASE.startsWith('/');
   const PROXY_BASES = [
     (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     (url) => `https://cors.isomorphic-git.org/${url}`,
     (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
   ];
-  const API_TIMEOUT = 12000;
+  const API_TIMEOUT = USE_LOCAL_PROXY ? 20000 : 12000;
   const CACHE_TTL = 1000 * 60 * 5;
   const ICONS = {
     heartOutline: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.3/24/outline/heart.svg',
@@ -175,7 +176,7 @@
     const cached = cache.get(url);
     if (cached && now - cached.ts < CACHE_TTL) return cached.data;
 
-    const endpoints = [url, ...PROXY_BASES.map((build) => build(url))];
+    const endpoints = USE_LOCAL_PROXY ? [url] : [url, ...PROXY_BASES.map((build) => build(url))];
     let lastError;
 
     for (const endpoint of endpoints) {
@@ -189,7 +190,11 @@
         cache.set(url, { ts: now, data });
         return data;
       } catch (err) {
-        lastError = err;
+        if (err?.name === 'AbortError') {
+          lastError = new Error('Request timeout. Please try again.');
+        } else {
+          lastError = err;
+        }
       }
     }
 

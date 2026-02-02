@@ -13,7 +13,10 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: cors, body: 'Method Not Allowed' };
   }
 
-  const path = event.path.replace('/.netlify/functions/deezer', '') || '/';
+  const rawPath = event.path || '';
+  const path = rawPath
+    .replace(/^\/\.netlify\/functions\/deezer/, '')
+    .replace(/^\/api/, '') || '/';
   const params = new URLSearchParams(event.queryStringParameters || {});
   const url = `${BASE}${path}${params.toString() ? `?${params}` : ''}`;
 
