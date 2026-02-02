@@ -5,7 +5,7 @@
   // constants / config
   // ===========================
   const APP_NAME = 'AuraWave';
-  const API_BASE = window.AURAWAVE_PROXY || 'https://api.deezer.com';
+  const API_BASE = 'https://api.corsproxy.cyou/https://api.deezer.com';
   const API_TIMEOUT = 12000;
   const CACHE_TTL = 1000 * 60 * 5;
   const ICONS = {
